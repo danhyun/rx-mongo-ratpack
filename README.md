@@ -1,5 +1,5 @@
 # rx-mongo-ratpack
-Test project 
+Testing the integration of rx-mongo with ratpack using reactive extensions.
 
 Insert (to localhost):
 
