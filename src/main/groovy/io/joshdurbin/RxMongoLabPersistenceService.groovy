@@ -1,38 +1,51 @@
 package io.joshdurbin
 
+import com.google.inject.Inject
 import com.mongodb.client.result.DeleteResult
 import com.mongodb.client.result.UpdateResult
-import org.bson.types.ObjectId
-
-import static com.mongodb.client.model.Filters.*;
-
 import com.mongodb.rx.client.MongoClient
 import com.mongodb.rx.client.MongoClients
 import com.mongodb.rx.client.MongoDatabase
 import com.mongodb.rx.client.Success
+import groovy.transform.CompileStatic
 import org.bson.Document
+import org.bson.types.ObjectId
+import ratpack.exec.ExecControl
+import ratpack.form.Form
+import ratpack.rx.RxRatpack
 import rx.Observable
+import rx.functions.Func1
 
+import static com.mongodb.client.model.Filters.eq
+
+@CompileStatic
 class RxMongoLabPersistenceService {
 
   MongoClient mongoClient
   MongoDatabase db
 
-  RxMongoLabPersistenceService() {
+  ExecControl execControl
+  Observable.Transformer<? super Document, ? extends Document> transformer
 
-    mongoClient = MongoClients.create("mongodb://demouser:demopass@ds045882.mongolab.com:45882/testdb")
+  @Inject
+  RxMongoLabPersistenceService(ExecControl execControl) {
+    this.execControl = execControl
+    mongoClient = MongoClients.create("mongodb://localhost:27017/")
     //mongoClient = MongoClients.create()
     db = mongoClient.getDatabase('testdb')
-
+    transformer = RxRatpack.&bindExec as Observable.Transformer<? super Document, ? extends Document>
   }
 
   public Observable<Document> getPeople() {
 
-    db.getCollection('people').find().toObservable()
+    db
+      .getCollection('people')
+      .find()
+      .toObservable()
+      .compose(transformer)
   }
 
   public Observable<UpdateResult> updatePerson(String id, String firstName, String lastName, Integer age) {
-
     db.getCollection('people').updateOne(eq("_id", new ObjectId(id)),
       new Document('$set', new Document("firstName", firstName))
         .append('$set', new Document("lastName", lastName))
@@ -40,23 +53,31 @@ class RxMongoLabPersistenceService {
   }
 
   public Observable<Document> getPerson(String id) {
-
-    db.getCollection('people').find(eq("_id", new ObjectId(id))).first()
+      db
+        .getCollection('people')
+        .find(eq("_id", new ObjectId(id)))
+        .first()
+        .compose(transformer)
   }
 
   public Observable<DeleteResult> removePerson(String id) {
-
     db.getCollection('people').deleteOne(eq("_id", new ObjectId(id))).first()
   }
 
-  public Observable<Success> insertPerson(String firstName, String lastName, Integer age) {
+  public Observable<Document> insertPerson(Form form) {
+    Document document =
+            new Document()
+              .append("firstName", form.firstName)
+              .append("lastName", form.lastName)
+              .append("age", form.age)
 
-    Document document = new Document()
-
-    document.append("firstName", firstName)
-    document.append("lastName", lastName)
-    document.append("age", age)
-
-    db.getCollection('people').insertOne(document)
+    db
+      .getCollection('people')
+      .insertOne(document)
+      .map({Success success ->
+        document
+      } as Func1)
+      .compose(transformer)
   }
+
 }

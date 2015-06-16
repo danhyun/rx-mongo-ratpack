@@ -1,6 +1,5 @@
 import com.mongodb.client.result.DeleteResult
 import com.mongodb.client.result.UpdateResult
-import com.mongodb.rx.client.Success
 
 import org.bson.Document
 import ratpack.form.Form
@@ -18,15 +17,14 @@ import static ratpack.groovy.Groovy.ratpack
 ratpack {
   bindings {
 
-    module new PersistenceModule()
     module MarkupTemplateModule
     module JacksonModule
 
-    bindInstance Service, new Service() {
+    module PersistenceModule
 
+    bindInstance Service, new Service() {
       @Override
       void onStart(StartEvent event) throws Exception {
-
         RxRatpack.initialize()
       }
     }
@@ -39,21 +37,19 @@ ratpack {
       byMethod {
 
         get {
-
           persistenceService.getPeople().toList().subscribe() { List<Document> people ->
             render Jackson.json(people)
           }
         }
 
         post {
-
           def form = parse(Form)
 
-          persistenceService.insertPerson(form.firstName as String, form.lastName as String, form.age as Integer).subscribe() { Success success ->
-
-            success.toString()
-            //redirect "/person/$id"
-          }
+          persistenceService
+              .insertPerson(form)
+              .subscribe { Document document ->
+                redirect "/person/${document.getObjectId('_id')}"
+              }
         }
       }
     }
@@ -65,11 +61,11 @@ ratpack {
         def idPathToken = pathTokens.id as String
 
         get {
-
-          persistenceService.getPerson(idPathToken).subscribe() { Document document ->
-
-            render Jackson.json(document)
-          }
+          persistenceService
+              .getPerson(idPathToken)
+              .subscribe { Document document ->
+                render Jackson.json(document)
+              }
         }
 
         put {
